@@ -4,12 +4,13 @@ https://github.com/user-attachments/assets/d3ce4694-b593-45ff-ae9a-892ce94b1dc8
 
 ## 🚀 What is Writing Tools?
 
-Writing Tools is an Apple Intelligence-inspired application for Windows that supercharges your writing with AI LLMs. It lets you fix up grammar and more with one hotkey press, system-wide. It's currently the world's most intelligent system-wide grammar assistant.
+Writing Tools is an Apple Intelligence-inspired application for MacOS that supercharges your writing with AI LLMs. It lets you fix up grammar and more with one hotkey press, system-wide. It's currently the world's most intelligent system-wide grammar assistant.
 
 ### 🌟 Why Choose Writing Tools?
 
 Aside from being the only Windows program that works like Apple's Writing Tools:
 
+--**Forked for MacOS**: Mofied the original to work on MacOS because only M-Series Macs will be getting Apple Intelligence.
 - **Versatile AI LLM Support**: Jump in quickly with support for the **free Gemini API**, or use an extensive range of **local LLMs** (via Ollama *[instructions below]*, llama.cpp, KoboldCPP, TabbyAPI, vLLM, etc.) or **cloud-based LLMs** (ChatGPT, Mistral AI, etc.) with Writing Tools' OpenAI-API-Compatibility.
 - **System-wide Functionality**: Works instantly in **any application** where you can select text. **Does not overwrite your clipboard**.
 - **Completely free and Open-source**: No subscriptions, no hidden costs. Bloat-free & uses pretty much **0% of your CPU**.
@@ -36,7 +37,7 @@ Invoke Writing Tools with no text selected to enter a chat mode.
 ## 🖱 How to Use
 
 1. Select any text in any application (or don't select any text to use chat mode).
-2. Press your hotkey (default: Ctrl+Space).
+2. Press your hotkey (default: Control+Space).
 3. Choose an option from the popup menu or enter a custom instruction.
 4. Watch as your text is magically improved!
 
