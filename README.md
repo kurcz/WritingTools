@@ -1,6 +1,6 @@
 # Writing Tools
 
-https://github.com/kurcz/WritingTools/blob/main/Writing%20Tools%20MacOS%20Demo.mp4
+https://github.com/user-attachments/assets/5817b813-07e8-4cb1-b058-640e75229773
 
 ## 🚀 What is Writing Tools?
 
