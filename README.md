@@ -10,7 +10,7 @@ Writing Tools is an Apple Intelligence-inspired application for MacOS that super
 
 Aside from being the only Windows program that works like Apple's Writing Tools:
 
---**Forked for MacOS**: Mofied the original to work on MacOS because only M-Series Macs will be getting Apple Intelligence.
+- **Forked for MacOS**: Mofied the original to work on MacOS because only M-Series Macs will be getting Apple Intelligence.
 - **Versatile AI LLM Support**: Jump in quickly with support for the **free Gemini API**, or use an extensive range of **local LLMs** (via Ollama *[instructions below]*, llama.cpp, KoboldCPP, TabbyAPI, vLLM, etc.) or **cloud-based LLMs** (ChatGPT, Mistral AI, etc.) with Writing Tools' OpenAI-API-Compatibility.
 - **System-wide Functionality**: Works instantly in **any application** where you can select text. **Does not overwrite your clipboard**.
 - **Completely free and Open-source**: No subscriptions, no hidden costs. Bloat-free & uses pretty much **0% of your CPU**.
