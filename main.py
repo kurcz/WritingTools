@@ -1,15 +1,9 @@
-import ctypes
 import logging
 import sys
-
 from WritingToolApp import WritingToolApp
 
 # Set up logging to console
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
-
-# Load user32.dll for Windows API calls
-user32 = ctypes.windll.user32
-
 
 def main():
     """

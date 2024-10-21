@@ -6,14 +6,16 @@ import threading
 import time
 
 import darkdetect
-import keyboard
 import pyperclip
-import win32clipboard
+from pynput import keyboard as pynput_keyboard
+from AppKit import NSWorkspace, NSApplicationActivateIgnoringOtherApps, NSRunningApplication
 from PySide6 import QtCore, QtGui, QtWidgets
 from PySide6.QtCore import Signal, Slot
 from PySide6.QtGui import QCursor, QGuiApplication
 from PySide6.QtWidgets import QMessageBox
 
+from google.generativeai.types import SafetySettingDict
+from google.generativeai.types.safety_types import HarmCategory, HarmBlockThreshold
 from aiprovider import Gemini15FlashProvider, OpenAICompatibleProvider
 from ui.AboutWindow import AboutWindow
 from ui.CustomPopupWindow import CustomPopupWindow
@@ -32,16 +34,17 @@ class WritingToolApp(QtWidgets.QApplication):
         super().__init__(argv)
         logging.debug('Initializing WritingToolApp')
         self.output_ready_signal.connect(self.replace_text)
-        self.show_message_signal.connect(self.show_message_box)  # Connect new signal
+        self.show_message_signal.connect(self.show_message_signal)
         self.load_config()
         self.onboarding_window = None
         self.popup_window = None
         self.tray_icon = None
         self.settings_window = None
         self.about_window = None
-        self.registered_hotkey = None
+        self.keyboard_listener = None
         self.output_queue = ""
         self.last_replace = 0
+        self.active_window_bundle_id = None  # Store bundle ID instead of window object
 
         # Setup available AI providers
         self.providers = [Gemini15FlashProvider(self), OpenAICompatibleProvider(self)]
@@ -52,9 +55,7 @@ class WritingToolApp(QtWidgets.QApplication):
         else:
             logging.debug('Config found, setting up hotkey and tray icon')
 
-            # Initialize the current provider, defaulting to Gemini 1.5 Flash
             provider_name = self.config.get('provider', 'Gemini 1.5 Flash')
-
             self.current_provider = next((provider for provider in self.providers if provider.provider_name == provider_name), None)
             if not self.current_provider:
                 logging.warning(f'Provider {provider_name} not found. Using default provider.')
@@ -98,21 +99,57 @@ class WritingToolApp(QtWidgets.QApplication):
 
     def register_hotkey(self):
         """
-        Register the global hotkey for activating Writing Tools.
+        Register the global hotkey for activating Writing Tools using pynput.
         """
         shortcut = self.config.get('shortcut', 'ctrl+space')
         logging.debug(f'Registering global hotkey for shortcut: {shortcut}')
-        try:
-            if self.registered_hotkey:
-                keyboard.remove_hotkey(self.registered_hotkey)
+        
+        try: 
+            if self.keyboard_listener:
+                self.keyboard_listener.stop()
 
-            keyboard.add_hotkey(shortcut, self.on_hotkey_pressed)
-            self.registered_hotkey = shortcut
+            # Convert shortcut string to pynput format
+            keys = shortcut.lower().split('+')
+            modifiers = set()
+            key = None
+            
+            for k in keys:
+                if k in ['ctrl', 'cmd', 'command']:
+                    modifiers.add(pynput_keyboard.Key.cmd)  # Use cmd instead of ctrl on macOS
+                elif k == 'alt':
+                    modifiers.add(pynput_keyboard.Key.alt)
+                elif k == 'shift':
+                    modifiers.add(pynput_keyboard.Key.shift)
+                else:
+                    key = k
 
+            def on_press(pressed_key):
+                if all(mod in self.current_modifiers for mod in modifiers):
+                    if hasattr(pressed_key, 'char'):
+                        if pressed_key.char == key:
+                            self.on_hotkey_pressed()
+                    elif hasattr(pressed_key, 'name'):
+                        if pressed_key.name == key:
+                            self.on_hotkey_pressed()
+
+            def on_release(key):
+                try:
+                    self.current_modifiers.remove(key)
+                except KeyError:
+                    pass
+
+            self.current_modifiers = set()
+            self.keyboard_listener = pynput_keyboard.Listener(
+                on_press=on_press,
+                on_release=on_release
+            )
+            self.keyboard_listener.start()
+            
             logging.debug('Hotkey registered successfully')
         except Exception as e:
             logging.error(f'Failed to register hotkey: {e}')
 
+   
     def on_hotkey_pressed(self):
         """
         Handle the hotkey press event.
@@ -174,21 +211,38 @@ class WritingToolApp(QtWidgets.QApplication):
             logging.debug(f'Popup window moved to position: ({x}, {y})')
         except Exception as e:
             logging.error(f'Error showing popup window: {e}', exc_info=True)
-
+    
+    def get_active_window_info(self):
+        """
+        Get the currently active window information.
+        """
+        try:
+            workspace = NSWorkspace.sharedWorkspace()
+            active_app = workspace.activeApplication()
+            if active_app and 'NSApplicationBundleIdentifier' in active_app:
+                return active_app['NSApplicationBundleIdentifier']
+        except Exception as e:
+            logging.error(f'Error getting active window info: {e}')
+        return None
+    
     def get_selected_text(self):
         """
-        Get the currently selected text from any application.
+        Get the currently selected text and remember the active window.
         """
+        # Store the active window bundle ID before copying
+        self.active_window_bundle_id = self.get_active_window_info()
+        logging.debug(f'Active window bundle ID: {self.active_window_bundle_id}')
+        
         # Backup the clipboard
         clipboard_backup = pyperclip.paste()
         logging.debug(f'Clipboard backup: "{clipboard_backup}"')
 
-        # Clear the clipboard
-        self.clear_clipboard()
-
-        # Simulate Ctrl+C
-        logging.debug('Simulating Ctrl+C')
-        keyboard.press_and_release('ctrl+c')
+        # Simulate Cmd+C (macOS equivalent of Ctrl+C)
+        logging.debug('Simulating Cmd+C')
+        keyboard_controller = pynput_keyboard.Controller()
+        with keyboard_controller.pressed(pynput_keyboard.Key.cmd):
+            keyboard_controller.press('c')
+            keyboard_controller.release('c')
 
         # Wait for the clipboard to update
         time.sleep(0.02)
@@ -201,18 +255,37 @@ class WritingToolApp(QtWidgets.QApplication):
         pyperclip.copy(clipboard_backup)
 
         return selected_text
+    
+    def focus_original_window(self):
+        """
+        Focus the window where the text was originally selected.
+        """
+        if not self.active_window_bundle_id:
+            logging.error('No active window bundle ID stored')
+            return False
+
+        try:
+            running_apps = NSRunningApplication.runningApplicationsWithBundleIdentifier_(self.active_window_bundle_id)
+            if running_apps and len(running_apps) > 0:
+                app = running_apps[0]
+                result = app.activateWithOptions_(NSApplicationActivateIgnoringOtherApps)
+                time.sleep(0.5)  # Give time for the window to gain focus
+                return result
+            else:
+                logging.error(f'No running application found with bundle ID: {self.active_window_bundle_id}')
+                return False
+        except Exception as e:
+            logging.error(f'Error focusing original window: {e}')
+            return False
 
     def clear_clipboard(self):
         """
-        Clear the system clipboard.
+        Clear the system clipboard using pyperclip.
         """
         try:
-            win32clipboard.OpenClipboard()
-            win32clipboard.EmptyClipboard()
+            pyperclip.copy('')
         except Exception as e:
             logging.error(f'Error clearing clipboard: {e}')
-        finally:
-            win32clipboard.CloseClipboard()
 
     def process_option(self, option, selected_text, custom_change=None):
         """
@@ -301,23 +374,20 @@ class WritingToolApp(QtWidgets.QApplication):
         """
         Replace the selected text with the new text generated by the AI.
         """
-
         error_message = 'ERROR_TEXT_INCOMPATIBLE_WITH_REQUEST'
 
-        # Confirm new_text exists and is a string
         if new_text and isinstance(new_text, str):
             self.output_queue += new_text
 
-            # If the new text is the error message, show a message box
             if self.output_queue == error_message:
                 self.show_message_signal.emit('Error', 'The text is incompatible with the requested change.')
                 return
 
-            # Check if the new text is approaching the error message
             if self.output_queue in error_message:
                 return
 
             logging.debug('Replacing text')
+            logging.debug(new_text)
             try:
                 # Backup the clipboard
                 clipboard_backup = pyperclip.paste()
@@ -325,19 +395,31 @@ class WritingToolApp(QtWidgets.QApplication):
                 # Set the clipboard to the new text
                 pyperclip.copy(self.output_queue)
 
-                # Simulate Ctrl+V
-                logging.debug('Simulating Ctrl+V')
-                keyboard.press_and_release('ctrl+v')
+                # Focus the original window before pasting
+                if self.focus_original_window():
+                    # Give additional time for window to be fully focused
+                    time.sleep(0.5)
+                    
+                    # Simulate Cmd+V (macOS equivalent of Ctrl+V)
+                    logging.debug('Simulating Cmd+V')
+                    keyboard_controller = pynput_keyboard.Controller()
+                    with keyboard_controller.pressed(pynput_keyboard.Key.cmd):
+                        keyboard_controller.press('v')
+                        keyboard_controller.release('v')
 
-                # Wait for the paste operation to complete
-                time.sleep(0.02)
+                    # Wait for the paste operation to complete
+                    time.sleep(0.5)
 
-                # Restore the clipboard
-                pyperclip.copy(clipboard_backup)
+                    # Restore the clipboard
+                    pyperclip.copy(clipboard_backup)
 
-                self.output_queue = ""
+                    self.output_queue = ""
+                else:
+                    logging.error('Failed to focus original window')
+                    self.show_message_signal.emit('Error', 'Failed to focus the original window')
             except Exception as e:
                 logging.error(f'Error replacing text: {e}')
+                self.show_message_signal.emit('Error', f'Error replacing text: {e}')
         else:
             logging.debug('No new text to replace')
 

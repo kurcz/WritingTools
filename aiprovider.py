@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from typing import List
 
 import google.generativeai as genai
-from google.generativeai.types import HarmBlockThreshold, HarmCategory
+from google.generativeai.types.safety_types import SafetySettingDict
 from openai import OpenAI
 from PySide6 import QtWidgets
 from PySide6.QtWidgets import QVBoxLayout
@@ -66,7 +66,6 @@ class TextSetting(AIProviderSetting):
 
 
 class AIProvider(ABC):
-    # settings: List[AIProviderSetting] is a list of AIProviderSetting objects that define the settings of the AI provider.
     def __init__(self, app, provider_name: str, settings: List[AIProviderSetting], description: str = "An unfinished AI provider!", logo: str = "generic", button_text: str = "Go to URL", button_action: callable = None):
         self.provider_name = provider_name
         self.settings = settings
@@ -79,19 +78,12 @@ class AIProvider(ABC):
 
     @abstractmethod
     def get_response(self, system_instruction: str, prompt: str) -> str:
-        """
-        Pass a system instruction and a prompt to the AI provider and return the response.
-        """
         pass
 
     def load_config(self, config: dict):
-        """
-        Load the configuration into this provider's memory.
-        """
         for setting in self.settings:
             if setting.name in config:
                 setattr(self, setting.name, config[setting.name])
-
                 setting.set_value(config[setting.name])
             else:
                 setattr(self, setting.name, setting.default_value)
@@ -99,9 +91,6 @@ class AIProvider(ABC):
         self.after_load()
 
     def save_config(self):
-        """
-        Save the provider's memory to the config, and then save the config to disk.
-        """
         config = {}
         for setting in self.settings:
             config[setting.name] = setting.get_value()
@@ -111,39 +100,29 @@ class AIProvider(ABC):
 
     @abstractmethod
     def after_load(self):
-        """
-        A method to be overridden by subclasses that is called after the settings have been loaded.
-        """
         pass
 
     @abstractmethod
     def before_load(self):
-        """
-        A method to be overridden by subclasses that is called before the settings have been loaded.
-        Useful for performing cleanup etc.
-        """
         pass
 
     @abstractmethod
     def cancel(self):
-        """
-        Cancel the current request.
-        """
         pass
 
-class Gemini15FlashProvider(AIProvider):
 
+class Gemini15FlashProvider(AIProvider):
     def __init__(self, app):
-        """
-        Initialize the Gemini 1.5 Flash provider.
-        """
         self.close_requested = False
         self.model = None
 
         settings = [
-            TextSetting(name = "api_key", display_name = "API Key", description = "Paste your Gemini API key here"),
+            TextSetting(name="api_key", display_name="API Key", description="Paste your Gemini API key here"),
         ]
-        super().__init__(app, "Gemini 1.5 Flash (Recommended)", settings, "• Gemini 1.5 Flash is a powerful AI model that has a free tier available.\n• Writing Tools needs an \"API key\" to connect to Gemini on your behalf.\n• Simply click Get API Key button below, copy your API key, and paste it below.\n• Note: With the free tier of the Gemini API, Google may anonymize & store the text that you send Writing Tools, for Gemini\'s improvement.", "gemini", "Get API Key", lambda: webbrowser.open("https://aistudio.google.com/app/apikey"))
+        super().__init__(app, "Gemini 1.5 Flash (Recommended)", settings, 
+                        "• Gemini 1.5 Flash is a powerful AI model that has a free tier available.\n• Writing Tools needs an \"API key\" to connect to Gemini on your behalf.\n• Simply click Get API Key button below, copy your API key, and paste it below.\n• Note: With the free tier of the Gemini API, Google may anonymize & store the text that you send Writing Tools, for Gemini\'s improvement.", 
+                        "gemini", "Get API Key", 
+                        lambda: webbrowser.open("https://aistudio.google.com/app/apikey"))
 
     def get_response(self, system_instruction: str, prompt: str):
         self.close_requested = False
@@ -173,23 +152,17 @@ class Gemini15FlashProvider(AIProvider):
             self.close_requested = False
             self.app.replace_text(True)
 
-
     def after_load(self):
         genai.configure(api_key=self.api_key)
 
+        # Updated model configuration without explicit safety settings
         self.model = genai.GenerativeModel(
             model_name='gemini-1.5-flash-latest',
             generation_config=genai.types.GenerationConfig(
                 candidate_count=1,
                 max_output_tokens=1000,
                 temperature=0.5
-            ),
-            safety_settings={
-                HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
-                HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
-                HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
-                HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
-            }
+            )
         )
 
     def before_load(self):
@@ -201,21 +174,21 @@ class Gemini15FlashProvider(AIProvider):
 
 class OpenAICompatibleProvider(AIProvider):
     def __init__(self, app):
-        """
-        Initialize the OpenAI-compatible provider.
-        """
         self.close_requested = None
         self.client = None
 
         settings = [
-            TextSetting(name = "api_key", display_name = "API Key", description = "API key for the OpenAI-compatible API."),
+            TextSetting(name="api_key", display_name="API Key", description="API key for the OpenAI-compatible API."),
             TextSetting("api_base", "API Base URL", "https://api.openai.com/v1", "Eg. https://api.openai.com/v1"),
             TextSetting("api_organisation", "API Organisation", "", "Leave blank if not applicable."),
             TextSetting("api_project", "API Project", "", "Leave blank if not applicable."),
             TextSetting("api_model", "API Model", "gpt-4o-mini", "Eg. gpt-4o-mini"),
         ]
 
-        super().__init__(app, "OpenAI Compatible (For Experts)", settings, "• Connect to ANY Open-AI Compatible API, such as OpenAI, Mistral AI, Anthropic, or locally hosted models via llama.cpp, KoboldCPP, TabbyAPI, vLLM, etc.\n• Note: You must adhere to the connected service's Terms of Service, and your text will be processed as per their Privacy Policies etc.", "openai", "Get OpenAI API Key", lambda: webbrowser.open("https://platform.openai.com/account/api-keys"))
+        super().__init__(app, "OpenAI Compatible (For Experts)", settings, 
+                        "• Connect to ANY Open-AI Compatible API, such as OpenAI, Mistral AI, Anthropic, or locally hosted models via llama.cpp, KoboldCPP, TabbyAPI, vLLM, etc.\n• Note: You must adhere to the connected service's Terms of Service, and your text will be processed as per their Privacy Policies etc.", 
+                        "openai", "Get OpenAI API Key", 
+                        lambda: webbrowser.open("https://platform.openai.com/account/api-keys"))
 
     def get_response(self, system_instruction: str, prompt: str):
         self.close_requested = False
@@ -253,7 +226,12 @@ class OpenAICompatibleProvider(AIProvider):
             self.app.replace_text(True)
 
     def after_load(self):
-        self.client = OpenAI(api_key=self.api_key, base_url=self.api_base, organization=self.api_organisation, project=self.api_project)
+        self.client = OpenAI(
+            api_key=self.api_key, 
+            base_url=self.api_base, 
+            organization=self.api_organisation, 
+            project=self.api_project
+        )
 
     def before_load(self):
         self.client = None
